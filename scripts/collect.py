@@ -1,3 +1,5 @@
+import time
+import urllib.error
 import os, json, datetime, urllib.request, urllib.parse
 
 YOUTUBE_KEY = os.environ['YOUTUBE_API_KEY']
@@ -31,9 +33,25 @@ def upsert(table, rows, conflict='id'):
         SUPABASE_URL + '/rest/v1/' + table + '?on_conflict=' + urllib.parse.quote(conflict),
         data=json.dumps(rows).encode(), headers=headers, method='POST'
     )
-    with urllib.request.urlopen(req, timeout=30) as response:
-        response.read()
+    for tentativa in range(1, 4):
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            response.read()
+        print(f"Supabase: {table} gravada com sucesso.")
+        break
 
+    except urllib.error.HTTPError as erro:
+        detalhe = erro.read().decode("utf-8", errors="replace")
+        print(
+            f"Supabase | tabela={table} | "
+            f"HTTP {erro.code} | tentativa={tentativa}/3 | "
+            f"resposta={detalhe[:1000]}"
+        )
+
+        if erro.code not in (429, 500, 502, 503, 504) or tentativa == 3:
+            raise
+
+        time.sleep(2 ** tentativa)
 def main():
     now = datetime.datetime.now(datetime.timezone.utc)
     today = now.date().isoformat()
